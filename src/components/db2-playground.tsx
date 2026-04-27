@@ -221,6 +221,7 @@ export function Db2Playground({ initialCatalog }: Db2PlaygroundProps) {
   const [selectedTableName, setSelectedTableName] = useState(initialCatalog[0]?.name ?? "");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [execution, setExecution] = useState<Db2ExecuteQueryResponse | null>(null);
+  const [executionError, setExecutionError] = useState<string | null>(null);
   const [isRunning, setIsRunning] = useState(false);
 
   const selectedTable = useMemo(() => catalog.find((table) => table.name === selectedTableName) ?? catalog[0] ?? null, [catalog, selectedTableName]);
@@ -232,24 +233,40 @@ export function Db2Playground({ initialCatalog }: Db2PlaygroundProps) {
 
   const parseError = liveParse.errors[0] ?? null;
   const summaryStatement = liveParse.statements[0] ?? null;
+  const latestResult = execution?.results[execution.results.length - 1] ?? null;
+
+  function getStatementTableName(statement: Db2Statement): string {
+    return statement.table;
+  }
+
+  const latestExecutionTable = latestResult
+    ? execution?.tables.find((table) => table.name === getStatementTableName(latestResult.statement)) ?? null
+    : null;
 
   async function handleRunQuery() {
     setIsRunning(true);
+    setExecutionError(null);
 
-    const outcome = await runDb2Query(query);
-    setCatalog(outcome.catalog);
-    setExecution(outcome.response);
+    try {
+      const outcome = await runDb2Query(query);
+      setCatalog(outcome.catalog);
+      setExecution(outcome.response);
 
-    if (selectedTableName && !outcome.catalog.some((table) => table.name === selectedTableName)) {
-      setSelectedTableName(outcome.catalog[0]?.name ?? "");
+      if (selectedTableName && !outcome.catalog.some((table) => table.name === selectedTableName)) {
+        setSelectedTableName(outcome.catalog[0]?.name ?? "");
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Query execution failed.";
+      setExecutionError(message);
+    } finally {
+      setIsRunning(false);
     }
-
-    setIsRunning(false);
   }
 
   function handleClearEditor() {
     setQuery("");
     setExecution(null);
+    setExecutionError(null);
   }
 
   async function handleRefreshTables() {
@@ -257,6 +274,7 @@ export function Db2Playground({ initialCatalog }: Db2PlaygroundProps) {
 
     setCatalog(restoredCatalog);
     setSelectedTableName(restoredCatalog[0]?.name ?? "");
+    setExecutionError(null);
     setExecution({
       source: "mock",
       program: { statements: [], errors: [] },
@@ -265,7 +283,6 @@ export function Db2Playground({ initialCatalog }: Db2PlaygroundProps) {
     });
   }
 
-  const latestResult = execution?.results[execution.results.length - 1] ?? null;
   const resultRows = latestResult?.rows ?? selectedTable?.rows ?? [];
   const resultColumns =
     latestResult?.statement.type === "Select" && Array.isArray(latestResult.statement.columns)
@@ -275,10 +292,8 @@ export function Db2Playground({ initialCatalog }: Db2PlaygroundProps) {
           index: "DEFAULT_INDEX" as const,
           nullable: true,
         })) as Db2Table["columns"])
-      : selectedTable?.columns ?? [];
-  const displayedTable = execution?.results.some((result) => result.statement.type === "Select")
-    ? catalog.find((table) => table.name === (latestResult?.statement.type === "Select" ? latestResult.statement.table : selectedTable?.name)) ?? selectedTable
-    : selectedTable;
+      : latestExecutionTable?.columns ?? selectedTable?.columns ?? [];
+  const displayedTable = latestExecutionTable ?? selectedTable;
 
   return (
     <div className="flex min-h-screen bg-background text-foreground">
@@ -461,10 +476,18 @@ export function Db2Playground({ initialCatalog }: Db2PlaygroundProps) {
                   Latest query output or a table preview when no query has been executed.
                 </p>
               </div>
-              <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${latestResult ? "bg-blue-50 text-blue-700" : "bg-slate-100 text-slate-600"}`}>
-                {latestResult?.message ?? "Waiting for execution"}
+              <span
+                className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${executionError ? "bg-rose-50 text-rose-700" : latestResult ? "bg-blue-50 text-blue-700" : "bg-slate-100 text-slate-600"}`}
+              >
+                {executionError ?? latestResult?.message ?? "Waiting for execution"}
               </span>
             </div>
+
+            {executionError ? (
+              <div className="border-b border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                {executionError}
+              </div>
+            ) : null}
 
             <div className="overflow-x-auto">
               <TablePreview rows={resultRows} columns={resultColumns} />
@@ -494,7 +517,7 @@ export function Db2Playground({ initialCatalog }: Db2PlaygroundProps) {
                 <p className="text-xs uppercase tracking-[0.2em] text-(--muted)">Grammar notes</p>
                 <ul className="mt-2 space-y-2 rounded-lg border border-slate-200 bg-white px-3 py-3 text-xs text-slate-600">
                   <li>
-                    SELECT only supports <span className="font-mono text-slate-900">*</span> projections.
+                    SELECT supports <span className="font-mono text-slate-900">*</span> and explicit column lists.
                   </li>
                   <li>WHERE supports comparisons, BETWEEN, and IN predicates.</li>
                   <li>CREATE TABLE accepts column indexes and optional FROM FILE source.</li>

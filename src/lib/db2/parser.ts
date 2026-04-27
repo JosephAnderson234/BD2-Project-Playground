@@ -332,12 +332,15 @@ class Db2Parser {
   }
 
   private synchronize(): void {
+    this.advance();
+
     while (!this.isAtEnd()) {
       if (this.previous().kind === "Symbol" && this.previous().value === ";") {
         return;
       }
 
       if (this.peek().kind === "Symbol" && this.peek().value === ";") {
+        this.advance();
         return;
       }
 
