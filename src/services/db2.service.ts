@@ -1,36 +1,59 @@
-import {
-  executeDb2QueryEndpoint,
-  fetchDb2TablesEndpoint,
-  resetDb2MockState,
-} from "@src/services/db2-endpoints";
-import type { Db2ExecuteQueryResponse, Db2QueryOutcome, Db2Table } from "@src/types/db2";
+import type { Db2ExecuteQueryResponse, Db2QueryOutcome, Db2Table, Db2TablesEndpointResponse } from "@src/types/db2";
 
-function cloneCatalog(catalog: Db2Table[]): Db2Table[] {
-  return catalog.map((table) => ({
-    ...table,
+async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(url, {
+    ...init,
+    headers: {
+      ...(init?.headers ?? {}),
+      "Content-Type": "application/json",
+    },
+    cache: "no-store",
+  });
+
+  const payload = await response.json();
+
+  if (!response.ok) {
+    const message = typeof payload === "object" && payload && "detail" in payload
+      ? String((payload as { detail?: { message?: string } }).detail?.message ?? "DB2 request failed.")
+      : "DB2 request failed.";
+    throw new Error(message);
+  }
+
+  return payload as T;
+}
+
+function normalizeCatalog(response: Db2TablesEndpointResponse): Db2Table[] {
+  return response.tables.map((table) => ({
+    name: table.name,
+    description: table.description,
     columns: table.columns.map((column) => ({ ...column })),
-    rows: table.rows.map((row) => ({ ...row })),
+    rows: table.rows ? table.rows.map((row) => ({ ...row })) : [],
   }));
 }
 
 export async function getInitialCatalog(): Promise<Db2Table[]> {
-  const response = await fetchDb2TablesEndpoint();
-  return cloneCatalog(response.tables);
+  const response = await fetchJson<Db2TablesEndpointResponse>("/api/tables");
+  return normalizeCatalog(response);
 }
 
 export async function refreshDb2Catalog(): Promise<Db2Table[]> {
-  const response = await fetchDb2TablesEndpoint();
-  return cloneCatalog(response.tables);
+  return getInitialCatalog();
 }
 
 export async function runDb2Query(query: string): Promise<Db2QueryOutcome> {
-  const response: Db2ExecuteQueryResponse = await executeDb2QueryEndpoint({ query });
+  const response = await fetchJson<Db2ExecuteQueryResponse>("/api/query", {
+    method: "POST",
+    body: JSON.stringify({ query }),
+  });
+
+  const catalog = await getInitialCatalog();
+
   return {
-    catalog: cloneCatalog(response.tables),
+    catalog,
     response,
   };
 }
 
 export function resetDb2Catalog(): void {
-  resetDb2MockState();
+  // The mock state was removed; the backend is now the source of truth.
 }

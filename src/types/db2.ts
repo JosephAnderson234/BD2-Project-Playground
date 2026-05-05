@@ -108,7 +108,7 @@ export interface Db2StatementExecutionResult {
 }
 
 export interface Db2TablesEndpointResponse {
-  source: "mock";
+  source: "mock" | "api" | "local";
   tables: Db2Table[];
 }
 
@@ -117,7 +117,7 @@ export interface Db2ExecuteQueryRequest {
 }
 
 export interface Db2ExecuteQueryResponse {
-  source: "mock";
+  source: "mock" | "api" | "local";
   program: Db2Program;
   results: Db2StatementExecutionResult[];
   tables: Db2Table[];
