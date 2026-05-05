@@ -57,3 +57,4 @@ export async function runDb2Query(query: string): Promise<Db2QueryOutcome> {
 export function resetDb2Catalog(): void {
   // The mock state was removed; the backend is now the source of truth.
 }
+

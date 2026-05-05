@@ -103,6 +103,7 @@ export type Db2ParseResult = Db2Program;
 export interface Db2StatementExecutionResult {
   statement: Db2Statement;
   message: string;
+  columns?: string[];
   rows: Db2Row[];
   affectedRows: number;
 }

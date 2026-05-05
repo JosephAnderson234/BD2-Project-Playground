@@ -138,9 +138,12 @@ function rowsToObjects(rows: Array<Array<Db2Scalar>> | Db2Row[], columns: string
 }
 
 function mapExecutionResult(result: Db2StatementExecutionResult): Db2StatementExecutionResult {
+  const columns = result.statement.type === "Select" ? resultColumns(result.statement, localCatalog) : undefined;
+
   return {
     statement: result.statement,
     message: result.message,
+    columns,
     rows: result.rows,
     affectedRows: result.affectedRows,
   };
@@ -225,6 +228,7 @@ function normalizeRemoteQuery(response: RemoteQueryResponse): Db2ExecuteQueryRes
       return {
         statement,
         message: result.message ?? result.status ?? "Query executed.",
+        columns: statement.type === "Select" ? columns : undefined,
         rows,
         affectedRows: typeof result.affected_rows === "number" ? result.affected_rows : rows.length,
       };

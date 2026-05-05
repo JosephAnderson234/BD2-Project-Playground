@@ -252,7 +252,7 @@ export function Db2Playground({ initialCatalog }: Db2PlaygroundProps) {
       setCatalog(outcome.catalog);
       setExecution(outcome.response);
 
-      if (selectedTableName && !outcome.catalog.some((table) => table.name === selectedTableName)) {
+      if (selectedTableName && !outcome.catalog.some((table: Db2Table) => table.name === selectedTableName)) {
         setSelectedTableName(outcome.catalog[0]?.name ?? "");
       }
     } catch (error) {
@@ -285,13 +285,13 @@ export function Db2Playground({ initialCatalog }: Db2PlaygroundProps) {
 
   const resultRows = latestResult?.rows ?? selectedTable?.rows ?? [];
   const resultColumns =
-    latestResult?.statement.type === "Select" && Array.isArray(latestResult.statement.columns)
-      ? (latestResult.statement.columns.map((column) => ({
+    latestResult?.columns?.length
+      ? latestResult.columns.map((column) => ({
           name: column,
           type: "VARCHAR" as const,
           index: "DEFAULT_INDEX" as const,
           nullable: true,
-        })) as Db2Table["columns"])
+        })) as Db2Table["columns"]
       : latestExecutionTable?.columns ?? selectedTable?.columns ?? [];
   const displayedTable = latestExecutionTable ?? selectedTable;
 
