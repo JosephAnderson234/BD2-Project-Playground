@@ -30,9 +30,10 @@ type RemoteTablesResponse = {
     name: string;
     description?: string;
     columns: Record<string, string>;
-    primary_key?: string;
+    primary_key?: string | null;
     indexes?: Array<{ column: string; type: string; unique: boolean }>;
-    point_columns?: Record<string, string>;
+    point_columns?: Record<string, [string, string]>;
+    record_count?: number;
     rows?: Db2Row[];
   }>;
 };
@@ -173,6 +174,13 @@ function normalizeRemoteTables(response: RemoteTablesResponse): Db2TablesEndpoin
     tables: response.tables.map((table) => ({
       name: table.name,
       description: table.description ?? `Table ${table.name}`,
+      primaryKey: table.primary_key ?? null,
+      indexes: table.indexes?.map((index) => ({
+        ...index,
+        column: index.column,
+      })),
+      pointColumns: table.point_columns,
+      recordCount: table.record_count,
       columns: Object.entries(table.columns).map(([name, type]) => ({
         name,
         type: type as Db2Column["type"],
@@ -222,13 +230,13 @@ function normalizeRemoteQuery(response: RemoteQueryResponse): Db2ExecuteQueryRes
                   where: { type: "Comparison", field: "", op: "=", value: null } as Db2WhereCondition,
                 };
 
-      const columns = resultColumns(statement, tables);
+      const columns = result.columns ?? resultColumns(statement, tables);
       const rows = rowsToObjects(result.rows ?? [], columns);
 
       return {
         statement,
         message: result.message ?? result.status ?? "Query executed.",
-        columns: statement.type === "Select" ? columns : undefined,
+        columns: result.columns ?? (statement.type === "Select" ? columns : undefined),
         rows,
         affectedRows: typeof result.affected_rows === "number" ? result.affected_rows : rows.length,
       };

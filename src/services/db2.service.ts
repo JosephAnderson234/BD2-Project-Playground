@@ -1,4 +1,11 @@
-import type { Db2ExecuteQueryResponse, Db2QueryOutcome, Db2Table, Db2TablesEndpointResponse } from "@src/types/db2";
+import type {
+  Db2ExecuteQueryResponse,
+  Db2QueryOutcome,
+  Db2Row,
+  Db2Table,
+  Db2TablesEndpointResponse,
+  Db2StatementExecutionResult,
+} from "@src/types/db2";
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {
@@ -28,7 +35,46 @@ function normalizeCatalog(response: Db2TablesEndpointResponse): Db2Table[] {
     description: table.description,
     columns: table.columns.map((column) => ({ ...column })),
     rows: table.rows ? table.rows.map((row) => ({ ...row })) : [],
+    primaryKey: table.primaryKey ?? null,
+    indexes: table.indexes ? table.indexes.map((index) => ({ ...index })) : undefined,
+    pointColumns: table.pointColumns ? { ...table.pointColumns } : undefined,
+    recordCount: table.recordCount,
   }));
+}
+
+function normalizeQueryRows(rows: unknown[], columns?: string[]): Db2Row[] {
+  if (!rows.length) {
+    return [];
+  }
+
+  if (!columns?.length) {
+    return rows.filter((row): row is Db2Row => Boolean(row) && typeof row === "object" && !Array.isArray(row));
+  }
+
+  return rows.map((row) => {
+    if (Array.isArray(row)) {
+      return columns.reduce<Db2Row>((record, columnName, columnIndex) => {
+        record[columnName] = row[columnIndex] ?? null;
+        return record;
+      }, {});
+    }
+
+    if (row && typeof row === "object") {
+      return row as Db2Row;
+    }
+
+    return {};
+  });
+}
+
+function normalizeQueryResponse(response: Db2ExecuteQueryResponse): Db2ExecuteQueryResponse {
+  return {
+    ...response,
+    results: response.results.map((result): Db2StatementExecutionResult => ({
+      ...result,
+      rows: normalizeQueryRows(result.rows as unknown[], result.columns),
+    })),
+  };
 }
 
 export async function getInitialCatalog(): Promise<Db2Table[]> {
@@ -41,10 +87,12 @@ export async function refreshDb2Catalog(): Promise<Db2Table[]> {
 }
 
 export async function runDb2Query(query: string): Promise<Db2QueryOutcome> {
-  const response = await fetchJson<Db2ExecuteQueryResponse>("/api/query", {
+  const response = normalizeQueryResponse(
+    await fetchJson<Db2ExecuteQueryResponse>("/api/query", {
     method: "POST",
     body: JSON.stringify({ query }),
-  });
+    }),
+  );
 
   const catalog = await getInitialCatalog();
 

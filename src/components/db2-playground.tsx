@@ -243,6 +243,81 @@ export function Db2Playground({ initialCatalog }: Db2PlaygroundProps) {
     ? execution?.tables.find((table) => table.name === getStatementTableName(latestResult.statement)) ?? null
     : null;
 
+  function isWildcardColumns(columns?: string[] | null): boolean {
+    return Array.isArray(columns) && columns.length === 1 && columns[0] === "*";
+  }
+
+  function getTableRecordCount(table: Db2Table | null | undefined): number {
+    return table?.recordCount ?? table?.rows.length ?? 0;
+  }
+
+  function getTablePrimaryKey(table: Db2Table | null | undefined): string {
+    return table?.primaryKey ?? "—";
+  }
+
+  function getTableIndexLabels(table: Db2Table | null | undefined): string[] {
+    if (!table) {
+      return [];
+    }
+
+    if (table.indexes?.length) {
+      return table.indexes.map((index) =>
+        typeof index.column === "string" ? `${index.column} · ${index.type}` : `${index.column.join(" / ")} · ${index.type}`,
+      );
+    }
+
+    return table.columns
+      .filter((column) => column.index !== "DEFAULT_INDEX")
+      .map((column) => `${column.name} · ${column.index}`);
+  }
+
+  function getTablePointColumns(table: Db2Table | null | undefined): string[] {
+    if (!table?.pointColumns) {
+      return [];
+    }
+
+    return Object.keys(table.pointColumns);
+  }
+
+  function normalizeRowsForDisplay(rows: unknown[], columns: Db2Table["columns"]): Db2Row[] {
+    if (!rows.length || !columns.length) {
+      return [];
+    }
+
+    return rows.map((row) => {
+      if (Array.isArray(row)) {
+        return columns.reduce<Db2Row>((record, column, columnIndex) => {
+          record[column.name] = row[columnIndex] ?? null;
+          return record;
+        }, {});
+      }
+
+      if (row && typeof row === "object") {
+        const typedRow = row as Record<string, unknown>;
+        const directMatch = columns.reduce<Db2Row>((record, column) => {
+          record[column.name] = (typedRow[column.name] as Db2Row[string]) ?? null;
+          return record;
+        }, {});
+
+        const hasAnyValue = columns.some((column) => directMatch[column.name] !== null);
+        if (hasAnyValue) {
+          return directMatch;
+        }
+
+        return columns.reduce<Db2Row>((record, column, columnIndex) => {
+          const indexedValue = typedRow[String(columnIndex)];
+          record[column.name] = (indexedValue as Db2Row[string]) ?? null;
+          return record;
+        }, {});
+      }
+
+      return columns.reduce<Db2Row>((record, column) => {
+        record[column.name] = null;
+        return record;
+      }, {});
+    });
+  }
+
   async function handleRunQuery() {
     setIsRunning(true);
     setExecutionError(null);
@@ -283,9 +358,10 @@ export function Db2Playground({ initialCatalog }: Db2PlaygroundProps) {
     });
   }
 
-  const resultRows = latestResult?.rows ?? selectedTable?.rows ?? [];
   const resultColumns =
-    latestResult?.columns?.length
+    isWildcardColumns(latestResult?.columns)
+      ? latestExecutionTable?.columns ?? selectedTable?.columns ?? []
+      : latestResult?.columns?.length
       ? latestResult.columns.map((column) => ({
           name: column,
           type: "VARCHAR" as const,
@@ -293,7 +369,11 @@ export function Db2Playground({ initialCatalog }: Db2PlaygroundProps) {
           nullable: true,
         })) as Db2Table["columns"]
       : latestExecutionTable?.columns ?? selectedTable?.columns ?? [];
+  const resultRows = normalizeRowsForDisplay(latestResult?.rows ?? selectedTable?.rows ?? [], resultColumns);
   const displayedTable = latestExecutionTable ?? selectedTable;
+  const displayedTableRecordCount = getTableRecordCount(displayedTable);
+  const displayedTableIndexLabels = getTableIndexLabels(displayedTable);
+  const displayedTablePointColumns = getTablePointColumns(displayedTable);
 
   return (
     <div className="flex min-h-screen bg-background text-foreground">
@@ -318,6 +398,7 @@ export function Db2Playground({ initialCatalog }: Db2PlaygroundProps) {
         <div className="flex-1 space-y-2 overflow-y-auto p-3">
           {catalog.map((table) => {
             const isSelected = table.name === selectedTableName;
+            const tableRows = getTableRecordCount(table);
 
             return (
               <button
@@ -332,15 +413,29 @@ export function Db2Playground({ initialCatalog }: Db2PlaygroundProps) {
                       {sidebarCollapsed ? table.name.slice(0, 2).toUpperCase() : table.name}
                     </p>
                     <p className={`mt-1 text-xs ${isSelected ? "text-blue-700/80" : "text-slate-500"}`}>
-                      {sidebarCollapsed ? `${table.rows.length}` : table.description}
+                      {sidebarCollapsed ? `${tableRows}` : table.description}
                     </p>
                   </div>
                   {!sidebarCollapsed ? (
                     <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-medium text-slate-600">
-                      {table.rows.length} rows
+                      {tableRows} rows
                     </span>
                   ) : null}
                 </div>
+
+                {!sidebarCollapsed ? (
+                  <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-slate-600">
+                    <span className="rounded-full bg-white px-2 py-0.5 ring-1 ring-slate-200">
+                      PK {getTablePrimaryKey(table)}
+                    </span>
+                    <span className="rounded-full bg-white px-2 py-0.5 ring-1 ring-slate-200">
+                      {table.columns.length} cols
+                    </span>
+                    <span className="rounded-full bg-white px-2 py-0.5 ring-1 ring-slate-200">
+                      {tableRows} rows
+                    </span>
+                  </div>
+                ) : null}
               </button>
             );
           })}
@@ -432,7 +527,7 @@ export function Db2Playground({ initialCatalog }: Db2PlaygroundProps) {
             <section className="overflow-hidden rounded-xl border border-(--border) bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
               <div className="border-b border-(--border) px-4 py-3">
                 <h2 className="text-sm font-semibold text-slate-900">Table details</h2>
-                <p className="mt-0.5 text-xs text-slate-500">Schema and sample rows for the selected table.</p>
+                <p className="mt-0.5 text-xs text-slate-500">Schema and catalog metadata for the selected table.</p>
               </div>
 
               <div className="space-y-4 p-4">
@@ -457,9 +552,44 @@ export function Db2Playground({ initialCatalog }: Db2PlaygroundProps) {
                 </div>
 
                 <div>
-                  <p className="text-xs uppercase tracking-[0.2em] text-(--muted)">Preview</p>
-                  <div className="mt-3 overflow-hidden rounded-lg border border-slate-200">
-                    <TablePreview rows={displayedTable?.rows ?? []} columns={displayedTable?.columns ?? []} />
+                  <p className="text-xs uppercase tracking-[0.2em] text-(--muted)">Catalog snapshot</p>
+                  <div className="mt-3 space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <InfoTile label="Records" value={`${displayedTableRecordCount}`} />
+                      <InfoTile label="Primary key" value={getTablePrimaryKey(displayedTable)} />
+                      <InfoTile label="Indexed columns" value={`${displayedTableIndexLabels.length}`} />
+                      <InfoTile label="Point columns" value={`${displayedTablePointColumns.length}`} />
+                    </div>
+
+                    <div className="rounded-lg border border-slate-200 bg-white px-3 py-3">
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Indexed column map</p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {displayedTableIndexLabels.length ? (
+                          displayedTableIndexLabels.map((label) => (
+                            <span key={label} className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-700">
+                              {label}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-sm text-slate-500">No index metadata available yet.</span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="rounded-lg border border-slate-200 bg-white px-3 py-3">
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Point columns</p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {displayedTablePointColumns.length ? (
+                          displayedTablePointColumns.map((columnName) => (
+                            <span key={columnName} className="rounded-full bg-blue-50 px-2.5 py-1 text-xs text-blue-700">
+                              {columnName}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-sm text-slate-500">No point-indexed columns yet.</span>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -592,6 +722,15 @@ function ActionButton({
     >
       {children}
     </button>
+  );
+}
+
+function InfoTile({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+      <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">{label}</p>
+      <p className="mt-1 text-sm font-medium text-slate-900">{value}</p>
+    </div>
   );
 }
 

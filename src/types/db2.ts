@@ -20,6 +20,14 @@ export interface Db2Table {
   description: string;
   columns: Db2Column[];
   rows: Db2Row[];
+  primaryKey?: string | null;
+  indexes?: Array<{
+    column: string | [string, string];
+    type: string;
+    unique: boolean;
+  }>;
+  pointColumns?: Record<string, [string, string]>;
+  recordCount?: number;
 }
 
 export type Db2ComparisonOperator = "=" | "<" | ">" | "<=" | ">=" | "!=";
