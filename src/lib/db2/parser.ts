@@ -129,7 +129,7 @@ class Db2Parser {
 
     do {
       const name = this.consumeIdentifier("Expected a column name.");
-      const type = this.consumeDataType("Expected a valid type (INT, FLOAT, VARCHAR).");
+      const type = this.consumeDataType("Expected a valid type (INT, FLOAT, VARCHAR, POINT).");
       
       let primaryKey = false;
       if (this.matchKeyword("PRIMARY")) {

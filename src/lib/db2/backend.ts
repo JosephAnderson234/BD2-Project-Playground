@@ -47,11 +47,22 @@ type RemoteQueryResponse = {
     columns?: string[];
     rows?: Array<Array<Db2Scalar>>;
     affected_rows?: number;
-    rid?: number;
+    rid?: number | number[];
     status?: string;
     table?: string;
     result?: unknown;
     message?: string;
+    is_spatial?: boolean;
+    spatial_data?: unknown;
+    metrics?: {
+      time_ms: number;
+      heap_reads: number;
+      heap_writes: number;
+      index_reads: number;
+      index_writes: number;
+      total_reads: number;
+      total_writes: number;
+    };
   }>;
 };
 
@@ -235,10 +246,17 @@ function normalizeRemoteQuery(response: RemoteQueryResponse): Db2ExecuteQueryRes
 
       return {
         statement,
+        type: result.type ?? statementType,
         message: result.message ?? result.status ?? "Query executed.",
         columns: result.columns ?? (statement.type === "Select" ? columns : undefined),
         rows,
         affectedRows: typeof result.affected_rows === "number" ? result.affected_rows : rows.length,
+        isSpatial: result.is_spatial,
+        spatialData: result.spatial_data,
+        rid: result.rid,
+        status: result.status,
+        result: result.result,
+        metrics: result.metrics,
       };
     }),
     tables,

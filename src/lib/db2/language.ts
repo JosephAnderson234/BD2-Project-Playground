@@ -30,7 +30,7 @@ export const DB2_KEYWORDS = [
 
 export const DB2_INDEX_TYPES = ["SEQUENTIAL", "HASH", "BTREE", "RTREE", "DEFAULT_INDEX"] as const;
 
-export const DB2_DATA_TYPES = ["INT", "FLOAT", "VARCHAR"] as const;
+export const DB2_DATA_TYPES = ["INT", "FLOAT", "VARCHAR", "POINT"] as const;
 
 export const DB2_OPERATORS = ["=", "<", ">", "<=", ">=", "!="] as const;
 
@@ -61,8 +61,18 @@ export const DB2_LANGUAGE_SNIPPETS = [
     insertText: "DELETE FROM ${1:table} WHERE ${2:column} = ${3:value};",
   },
   {
-    label: "Spatial IN",
-    detail: "Spatial predicate with POINT and RADIUS",
+    label: "Spatial IN RADIUS",
+    detail: "Spatial predicate: search within a radius",
     insertText: "SELECT * FROM ${1:table} WHERE ${2:field} IN (POINT(${3:x}, ${4:y}), RADIUS ${5:radius});",
+  },
+  {
+    label: "Spatial IN KNN",
+    detail: "Spatial predicate: K nearest neighbours",
+    insertText: "SELECT * FROM ${1:table} WHERE ${2:field} IN (POINT(${3:x}, ${4:y}), K ${5:k});",
+  },
+  {
+    label: "CREATE TABLE with POINT",
+    detail: "Create a table with a spatial POINT column",
+    insertText: "CREATE TABLE ${1:table} (${2:id} INT INDEX BTREE, ${3:location} POINT INDEX RTREE);",
   },
 ] as const;

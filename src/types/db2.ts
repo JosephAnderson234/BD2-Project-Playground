@@ -2,7 +2,7 @@ export type Db2Scalar = string | number | boolean | null;
 
 export type Db2IndexType = "DEFAULT_INDEX" | "SEQUENTIAL" | "HASH" | "BTREE" | "RTREE";
 
-export type Db2DataType = "INT" | "FLOAT" | "VARCHAR";
+export type Db2DataType = "INT" | "FLOAT" | "VARCHAR" | "POINT";
 
 export interface Db2Column {
   name: string;
@@ -109,12 +109,29 @@ export interface Db2Token {
 
 export type Db2ParseResult = Db2Program;
 
+export interface Db2Metrics {
+  time_ms: number;
+  heap_reads: number;
+  heap_writes: number;
+  index_reads: number;
+  index_writes: number;
+  total_reads: number;
+  total_writes: number;
+}
+
 export interface Db2StatementExecutionResult {
   statement: Db2Statement;
+  type?: string;
   message: string;
   columns?: string[];
   rows: Db2Row[];
   affectedRows: number;
+  isSpatial?: boolean;
+  spatialData?: unknown;
+  rid?: number | number[];
+  status?: string;
+  result?: unknown;
+  metrics?: Db2Metrics;
 }
 
 export interface Db2TablesEndpointResponse {

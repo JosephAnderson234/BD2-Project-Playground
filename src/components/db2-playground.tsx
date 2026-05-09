@@ -1,8 +1,22 @@
 "use client";
 
 import Editor, { type BeforeMount, type OnMount } from "@monaco-editor/react";
+import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type * as MonacoEditor from "monaco-editor";
+
+const SpatialMap = dynamic(
+  () => import("@src/components/spatial-map"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-[420px] w-full animate-pulse rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-center text-slate-400">
+        Loading map...
+      </div>
+    ),
+  }
+);
+import type { SpatialQueryContext } from "@src/components/spatial-map";
 
 import { parseDb2Program } from "@src/lib/db2/grammar";
 import {
@@ -13,7 +27,7 @@ import {
   DB2_OPERATORS,
 } from "@src/lib/db2/language";
 import { refreshDb2Catalog, runDb2Query } from "@src/services/db2.service";
-import type { Db2ExecuteQueryResponse, Db2Program, Db2Row, Db2Statement, Db2Table } from "@src/types/db2";
+import type { Db2ExecuteQueryResponse, Db2Program, Db2Row, Db2Statement, Db2Table, Db2WhereCondition } from "@src/types/db2";
 
 const DEFAULT_QUERY = "SELECT * FROM users WHERE age BETWEEN 30 AND 42;";
 const LANGUAGE_ID = "db2";
@@ -59,7 +73,8 @@ function configureDb2Language(monaco: Parameters<BeforeMount>[0]) {
       root: [
         [/[;,.]/, "delimiter"],
         [/\(|\)/, "delimiter.parenthesis"],
-        [/\b(?:CREATE|TABLE|SELECT|FROM|WHERE|INSERT|INTO|VALUES|DELETE|FILE|INDEX|SEQUENTIAL|HASH|BTREE|RTREE|BETWEEN|AND|IN|POINT|RADIUS|K|DEFAULT_INDEX|INT|FLOAT|VARCHAR)\b/i, "keyword"],
+        [/\b(?:INT|FLOAT|VARCHAR|POINT)\b/i, "type"],
+        [/\b(?:CREATE|TABLE|SELECT|FROM|WHERE|INSERT|INTO|VALUES|DELETE|FILE|INDEX|SEQUENTIAL|HASH|BTREE|RTREE|BETWEEN|AND|IN|POINT|RADIUS|K|DEFAULT_INDEX|PRIMARY|KEY)\b/i, "keyword"],
         [/<=|>=|!=|=|<|>/, "operator"],
         [/\b\d+(?:\.\d+)?\b/, "number"],
         [/"([^"\\]|\\.)*"/, "string"],
@@ -189,6 +204,7 @@ function configureDb2Language(monaco: Parameters<BeforeMount>[0]) {
     inherit: true,
     rules: [
       { token: "keyword", foreground: "1d4ed8", fontStyle: "bold" },
+      { token: "type", foreground: "0e7490", fontStyle: "bold" },
       { token: "string", foreground: "0f766e" },
       { token: "number", foreground: "9333ea" },
       { token: "identifier", foreground: "111827" },
@@ -245,6 +261,18 @@ export function Db2Playground({ initialCatalog }: Db2PlaygroundProps) {
 
   function isWildcardColumns(columns?: string[] | null): boolean {
     return Array.isArray(columns) && columns.length === 1 && columns[0] === "*";
+  }
+
+  function getSpatialQueryContext(statement: Db2Statement | null): SpatialQueryContext | undefined {
+    if (!statement || statement.type !== "Select" || !statement.where) return undefined;
+    const where = statement.where as Db2WhereCondition;
+    if (where.type !== "SpatialIn") return undefined;
+    return {
+      mode: where.radius != null ? "radius" : where.k != null ? "knn" : "unknown",
+      center: where.point as [number, number],
+      radius: where.radius,
+      k: where.k,
+    };
   }
 
   function getTableRecordCount(table: Db2Table | null | undefined): number {
@@ -620,8 +648,54 @@ export function Db2Playground({ initialCatalog }: Db2PlaygroundProps) {
             ) : null}
 
             <div className="overflow-x-auto">
-              <TablePreview rows={resultRows} columns={resultColumns} />
+              {latestResult?.isSpatial ? (
+                <div className="px-4 py-6">
+                  <div className="mb-4 flex items-center justify-between">
+                    <p className="text-sm font-medium text-slate-900">Spatial data view</p>
+                  </div>
+                  <div className="grid gap-4 lg:grid-cols-2">
+                    <SpatialMap
+                      data={latestResult.spatialData}
+                      queryContext={getSpatialQueryContext(latestResult.statement)}
+                    />
+                    <pre className="db2-scrollbar max-h-[420px] overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-4 text-xs font-mono text-slate-700">
+                      {JSON.stringify(latestResult.spatialData, null, 2)}
+                    </pre>
+                  </div>
+                </div>
+              ) : latestResult?.type === "create_table" ? (
+                <div className="px-4 py-6 text-sm text-slate-600">
+                  Table <span className="font-semibold text-slate-900">{latestResult.statement.table ?? "unknown"}</span> created successfully.
+                </div>
+              ) : latestResult?.type === "insert" || latestResult?.type === "delete" ? (
+                <div className="px-4 py-6 text-sm text-slate-600">
+                  {latestResult.affectedRows} row{latestResult.affectedRows !== 1 ? "s" : ""} affected.
+                  {latestResult.rid && (
+                    <span className="mt-2 block text-xs text-slate-500">
+                      Record IDs: {Array.isArray(latestResult.rid) ? latestResult.rid.join(", ") : latestResult.rid}
+                    </span>
+                  )}
+                </div>
+              ) : latestResult?.result !== undefined ? (
+                <div className="px-4 py-6 text-sm text-slate-600">
+                  Result: <span className="font-semibold text-slate-900">{String(latestResult.result)}</span>
+                </div>
+              ) : (
+                <TablePreview rows={resultRows} columns={resultColumns} />
+              )}
             </div>
+
+            {latestResult?.metrics ? (
+              <div className="border-t border-(--border) bg-slate-50 px-4 py-4">
+                <p className="text-xs uppercase tracking-[0.2em] text-(--muted)">Execution metrics</p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-4">
+                  <Metric label="Time" value={`${latestResult.metrics.time_ms.toFixed(3)} ms`} />
+                  <Metric label="Heap (R/W)" value={`${latestResult.metrics.heap_reads} / ${latestResult.metrics.heap_writes}`} />
+                  <Metric label="Index (R/W)" value={`${latestResult.metrics.index_reads} / ${latestResult.metrics.index_writes}`} />
+                  <Metric label="Total (R/W)" value={`${latestResult.metrics.total_reads} / ${latestResult.metrics.total_writes}`} />
+                </div>
+              </div>
+            ) : null}
 
             <div className="grid gap-4 border-t border-(--border) bg-white px-4 py-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
               <div>
