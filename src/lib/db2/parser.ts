@@ -96,7 +96,8 @@ class Db2Parser {
     const columns = this.parseSelectColumns();
     this.consumeKeyword("FROM", "Expected FROM after SELECT columns.");
     const table = this.consumeIdentifier("Expected a table name after FROM.");
-    const where = this.matchKeyword("WHERE") ? this.parseWhereCondition() : null;
+    this.consumeKeyword("WHERE", "Expected WHERE in SELECT statement.");
+    const where = this.parseWhereCondition();
 
     return { type: "Select", columns, table, where };
   }
@@ -123,18 +124,26 @@ class Db2Parser {
       name: string;
       type: (typeof DB2_DATA_TYPES)[number];
       index: (typeof DB2_INDEX_TYPES)[number];
+      primaryKey?: boolean;
     }> = [];
 
     do {
       const name = this.consumeIdentifier("Expected a column name.");
       const type = this.consumeDataType("Expected a valid type (INT, FLOAT, VARCHAR).");
+      
+      let primaryKey = false;
+      if (this.matchKeyword("PRIMARY")) {
+        this.consumeKeyword("KEY", "Expected KEY after PRIMARY.");
+        primaryKey = true;
+      }
+
       let index: (typeof DB2_INDEX_TYPES)[number] = "DEFAULT_INDEX";
 
       if (this.matchKeyword("INDEX")) {
         index = this.consumeIndexType("Expected an index type after INDEX.");
       }
 
-      columns.push({ name, type, index });
+      columns.push({ name, type, index, primaryKey });
     } while (this.matchSymbol(","));
 
     this.consumeSymbol(")", "Expected ) after column definitions.");
@@ -167,7 +176,12 @@ class Db2Parser {
     this.consumeKeyword("FROM", "Expected FROM after DELETE.");
     const table = this.consumeIdentifier("Expected a table name after FROM.");
     this.consumeKeyword("WHERE", "DELETE statements must include WHERE.");
-    const where = this.parseWhereCondition();
+    
+    const field = this.consumeIdentifier("Expected a field name in WHERE.");
+    const op = this.consumeComparisonOperator("Expected a comparison operator.");
+    const value = this.parseLiteral("Expected a comparison value.");
+    const where: Db2WhereCondition = { type: "Comparison", field, op, value };
+    
     return { type: "Delete", table, where };
   }
 
@@ -241,7 +255,7 @@ class Db2Parser {
   }
 
   private consumeIdentifier(message: string): string {
-    if (this.matchToken("Id")) {
+    if (this.matchToken("Id") || this.matchToken("Keyword")) {
       return this.previous().value;
     }
 

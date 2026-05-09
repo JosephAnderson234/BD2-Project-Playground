@@ -647,11 +647,11 @@ export function Db2Playground({ initialCatalog }: Db2PlaygroundProps) {
                 <p className="text-xs uppercase tracking-[0.2em] text-(--muted)">Grammar notes</p>
                 <ul className="mt-2 space-y-2 rounded-lg border border-slate-200 bg-white px-3 py-3 text-xs text-slate-600">
                   <li>
-                    SELECT supports <span className="font-mono text-slate-900">*</span> and explicit column lists.
+                    SELECT requires a WHERE clause, and supports <span className="font-mono text-slate-900">*</span> or explicit column lists.
                   </li>
-                  <li>WHERE supports comparisons, BETWEEN, and IN predicates.</li>
-                  <li>CREATE TABLE accepts column indexes and optional FROM FILE source.</li>
-                  <li>INSERT and DELETE update the in-memory catalog for this prototype.</li>
+                  <li>WHERE supports comparisons, BETWEEN, and IN predicates for SELECT.</li>
+                  <li>CREATE TABLE accepts PRIMARY KEY, column indexes and optional FROM FILE source.</li>
+                  <li>INSERT and DELETE update the in-memory catalog (DELETE restricted to comparisons).</li>
                 </ul>
               </div>
             </div>

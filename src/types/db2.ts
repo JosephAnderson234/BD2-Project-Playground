@@ -79,6 +79,7 @@ export type Db2Statement =
         name: string;
         type: Db2DataType;
         index: Db2IndexType;
+        primaryKey?: boolean;
       }>;
       fromFile: string | null;
     }

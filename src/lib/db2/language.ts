@@ -24,6 +24,8 @@ export const DB2_KEYWORDS = [
   "INT",
   "FLOAT",
   "VARCHAR",
+  "PRIMARY",
+  "KEY",
 ] as const;
 
 export const DB2_INDEX_TYPES = ["SEQUENTIAL", "HASH", "BTREE", "RTREE", "DEFAULT_INDEX"] as const;
