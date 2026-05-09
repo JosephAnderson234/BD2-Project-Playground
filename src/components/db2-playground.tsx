@@ -32,6 +32,7 @@ import type { Db2ExecuteQueryResponse, Db2Program, Db2Row, Db2Statement, Db2Tabl
 const DEFAULT_QUERY = "SELECT * FROM users WHERE age BETWEEN 30 AND 42;";
 const LANGUAGE_ID = "db2";
 const THEME_ID = "db2-light";
+const DARK_THEME_ID = "db2-dark";
 
 let db2LanguageConfigured = false;
 let db2CompletionCatalog: Db2Table[] = [];
@@ -224,6 +225,33 @@ function configureDb2Language(monaco: Parameters<BeforeMount>[0]) {
       "editorWidget.border": "#cbd5e1",
     },
   });
+
+  monaco.editor.defineTheme(DARK_THEME_ID, {
+    base: "vs-dark",
+    inherit: true,
+    rules: [
+      { token: "keyword", foreground: "79c0ff", fontStyle: "bold" },
+      { token: "type", foreground: "56d364", fontStyle: "bold" },
+      { token: "string", foreground: "a5d6ff" },
+      { token: "number", foreground: "d2a8ff" },
+      { token: "identifier", foreground: "e6edf3" },
+      { token: "operator", foreground: "ff7b72" },
+      { token: "delimiter", foreground: "8b949e" },
+      { token: "comment", foreground: "6e7681", fontStyle: "italic" },
+    ],
+    colors: {
+      "editor.background": "#0d1117",
+      "editor.foreground": "#e6edf3",
+      "editor.lineHighlightBackground": "#161b22",
+      "editorLineNumber.foreground": "#6e7681",
+      "editorLineNumber.activeForeground": "#c9d1d9",
+      "editorIndentGuide.background": "#21262d",
+      "editorIndentGuide.activeBackground": "#30363d",
+      "editorWidget.background": "#161b22",
+      "editorWidget.border": "#30363d",
+    },
+  });
+
   db2LanguageConfigured = true;
 }
 
@@ -239,6 +267,25 @@ export function Db2Playground({ initialCatalog }: Db2PlaygroundProps) {
   const [execution, setExecution] = useState<Db2ExecuteQueryResponse | null>(null);
   const [executionError, setExecutionError] = useState<string | null>(null);
   const [isRunning, setIsRunning] = useState(false);
+  const [isDark, setIsDark] = useState(false);
+
+  useEffect(() => {
+    const stored = localStorage.getItem("db2-theme");
+    const prefersDark = stored ? stored === "dark" : window.matchMedia("(prefers-color-scheme: dark)").matches;
+    setIsDark(prefersDark);
+    document.documentElement.setAttribute("data-theme", prefersDark ? "dark" : "light");
+  }, []);
+
+  function toggleTheme() {
+    setIsDark((prev) => {
+      const next = !prev;
+      document.documentElement.setAttribute("data-theme", next ? "dark" : "light");
+      localStorage.setItem("db2-theme", next ? "dark" : "light");
+      return next;
+    });
+  }
+
+  const activeMonacoTheme = isDark ? DARK_THEME_ID : THEME_ID;
 
   const selectedTable = useMemo(() => catalog.find((table) => table.name === selectedTableName) ?? catalog[0] ?? null, [catalog, selectedTableName]);
   const liveParse = useMemo<Db2Program>(() => parseDb2Program(query), [query]);
@@ -411,11 +458,11 @@ export function Db2Playground({ initialCatalog }: Db2PlaygroundProps) {
         <div className="flex items-center justify-between gap-3 border-b border-(--border) px-4 py-4">
           <div className={sidebarCollapsed ? "sr-only" : "block"}>
             <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-(--muted)">DB2 Playground</p>
-            <h1 className="mt-1 text-sm font-semibold text-slate-900">Tables</h1>
+            <h1 className="mt-1 text-sm font-semibold text-foreground">Tables</h1>
           </div>
           <button
             type="button"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-(--border) bg-white text-slate-600 transition hover:border-slate-300 hover:text-slate-900"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-(--border) bg-(--surface) text-(--muted) transition hover:border-(--border) hover:text-foreground"
             onClick={() => setSidebarCollapsed((value) => !value)}
             aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
@@ -433,33 +480,33 @@ export function Db2Playground({ initialCatalog }: Db2PlaygroundProps) {
                 key={table.name}
                 type="button"
                 onClick={() => setSelectedTableName(table.name)}
-                className={`w-full rounded-lg border px-3 py-3 text-left transition ${isSelected ? "border-blue-200 bg-blue-50 shadow-sm" : "border-transparent bg-transparent hover:border-slate-200 hover:bg-white"}`}
+                className={`w-full rounded-lg border px-3 py-3 text-left transition ${isSelected ? "border-blue-200/40 bg-blue-600/10 shadow-sm" : "border-transparent bg-transparent hover:border-(--border) hover:bg-(--surface)"}`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className={`truncate text-sm font-semibold ${isSelected ? "text-blue-700" : "text-slate-900"}`}>
+                    <p className={`truncate text-sm font-semibold ${isSelected ? "text-(--accent)" : "text-foreground"}`}>
                       {sidebarCollapsed ? table.name.slice(0, 2).toUpperCase() : table.name}
                     </p>
-                    <p className={`mt-1 text-xs ${isSelected ? "text-blue-700/80" : "text-slate-500"}`}>
+                    <p className={`mt-1 text-xs ${isSelected ? "text-(--accent)/80" : "text-(--muted)"}`}>
                       {sidebarCollapsed ? `${tableRows}` : table.description}
                     </p>
                   </div>
                   {!sidebarCollapsed ? (
-                    <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                    <span className="rounded-full border border-(--border) bg-(--surface) px-2 py-0.5 text-[11px] font-medium text-(--muted)">
                       {tableRows} rows
                     </span>
                   ) : null}
                 </div>
 
                 {!sidebarCollapsed ? (
-                  <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-slate-600">
-                    <span className="rounded-full bg-white px-2 py-0.5 ring-1 ring-slate-200">
+                  <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-(--muted)">
+                    <span className="rounded-full bg-(--surface) px-2 py-0.5 ring-1 ring-(--border)">
                       PK {getTablePrimaryKey(table)}
                     </span>
-                    <span className="rounded-full bg-white px-2 py-0.5 ring-1 ring-slate-200">
+                    <span className="rounded-full bg-(--surface) px-2 py-0.5 ring-1 ring-(--border)">
                       {table.columns.length} cols
                     </span>
-                    <span className="rounded-full bg-white px-2 py-0.5 ring-1 ring-slate-200">
+                    <span className="rounded-full bg-(--surface) px-2 py-0.5 ring-1 ring-(--border)">
                       {tableRows} rows
                     </span>
                   </div>
@@ -471,15 +518,15 @@ export function Db2Playground({ initialCatalog }: Db2PlaygroundProps) {
       </aside>
 
       <main className="db2-scrollbar flex min-w-0 flex-1 flex-col">
-        <header className="border-b border-(--border) bg-white/90 px-4 py-3 backdrop-blur">
+        <header className="border-b border-(--border) bg-(--surface)/90 px-4 py-3 backdrop-blur">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-(--muted)">Query workspace</p>
-              <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-600">
-                <span className="font-semibold text-slate-900">{selectedTable?.name ?? "No table selected"}</span>
-                <span className="h-1 w-1 rounded-full bg-slate-300" />
+              <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-(--muted)">
+                <span className="font-semibold text-foreground">{selectedTable?.name ?? "No table selected"}</span>
+                <span className="h-1 w-1 rounded-full bg-(--border)" />
                 <span>{catalog.length} tables loaded</span>
-                <span className="h-1 w-1 rounded-full bg-slate-300" />
+                <span className="h-1 w-1 rounded-full bg-(--border)" />
                 <span>{isRunning ? "Running query..." : liveParse.errors.length ? `Parser errors: ${liveParse.errors.length}` : `Parsed ${liveParse.statements.length} statements`}</span>
               </div>
             </div>
@@ -494,20 +541,21 @@ export function Db2Playground({ initialCatalog }: Db2PlaygroundProps) {
               <ActionButton variant="secondary" onClick={handleRefreshTables}>
                 Refresh tables
               </ActionButton>
+              <ThemeToggle isDark={isDark} onToggle={toggleTheme} />
             </div>
           </div>
         </header>
 
         <div className="grid flex-1 gap-4 p-4 xl:grid-cols-[minmax(0,1.6fr)_360px]">
-          <section className="flex min-h-140 flex-col overflow-hidden rounded-xl border border-(--border) bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+          <section className="flex min-h-140 flex-col overflow-hidden rounded-xl border border-(--border) bg-(--surface) shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
             <div className="flex items-center justify-between gap-3 border-b border-(--border) px-4 py-3">
               <div>
-                <h2 className="text-sm font-semibold text-slate-900">Editor</h2>
-                <p className="mt-0.5 text-xs text-slate-500">
+                <h2 className="text-sm font-semibold text-foreground">Editor</h2>
+                <p className="mt-0.5 text-xs text-(--muted)">
                   Supports SELECT, CREATE TABLE, INSERT, and DELETE statements.
                 </p>
               </div>
-              <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${liveParse.errors.length ? "bg-rose-50 text-rose-700" : "bg-emerald-50 text-emerald-700"}`}>
+              <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${liveParse.errors.length ? "bg-rose-500/10 text-rose-500" : "bg-emerald-500/10 text-emerald-500"}`}>
                 {liveParse.errors.length ? "Syntax error" : `${liveParse.statements.length} statement${liveParse.statements.length === 1 ? "" : "s"}`}
               </span>
             </div>
@@ -517,13 +565,13 @@ export function Db2Playground({ initialCatalog }: Db2PlaygroundProps) {
                 beforeMount={configureDb2Language}
                 onMount={((editor, monaco) => {
                   configureDb2Language(monaco);
-                  monaco.editor.setTheme(THEME_ID);
+                  monaco.editor.setTheme(activeMonacoTheme);
                   editor.focus();
                 }) as OnMount}
                 value={query}
                 onChange={(value) => setQuery(value ?? "")}
                 language={LANGUAGE_ID}
-                theme={THEME_ID}
+                theme={activeMonacoTheme}
                 height="100%"
                 options={{
                   automaticLayout: true,
@@ -544,7 +592,7 @@ export function Db2Playground({ initialCatalog }: Db2PlaygroundProps) {
               />
             </div>
 
-            <div className="grid gap-2 border-t border-(--border) px-4 py-3 text-xs text-slate-600 md:grid-cols-3">
+            <div className="grid gap-2 border-t border-(--border) px-4 py-3 text-xs text-(--muted) md:grid-cols-3">
               <Metric label="Statements" value={`${liveParse.statements.length} parsed`} />
               <Metric label="Errors" value={`${liveParse.errors.length} issue${liveParse.errors.length === 1 ? "" : "s"}`} />
               <Metric label="Mode" value={summaryStatement?.type ?? "Program"} />
@@ -552,10 +600,10 @@ export function Db2Playground({ initialCatalog }: Db2PlaygroundProps) {
           </section>
 
           <aside className="flex min-h-140 flex-col gap-4">
-            <section className="overflow-hidden rounded-xl border border-(--border) bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+            <section className="overflow-hidden rounded-xl border border-(--border) bg-(--surface) shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
               <div className="border-b border-(--border) px-4 py-3">
-                <h2 className="text-sm font-semibold text-slate-900">Table details</h2>
-                <p className="mt-0.5 text-xs text-slate-500">Schema and catalog metadata for the selected table.</p>
+                <h2 className="text-sm font-semibold text-foreground">Table details</h2>
+                <p className="mt-0.5 text-xs text-(--muted)">Schema and catalog metadata for the selected table.</p>
               </div>
 
               <div className="space-y-4 p-4">
@@ -565,13 +613,13 @@ export function Db2Playground({ initialCatalog }: Db2PlaygroundProps) {
                     {displayedTable?.columns.map((column) => (
                       <div
                         key={column.name}
-                        className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"
+                        className="flex items-center justify-between gap-3 rounded-lg border border-(--border) bg-(--surface-subtle) px-3 py-2"
                       >
                         <div>
-                          <p className="text-sm font-medium text-slate-900">{column.name}</p>
-                          <p className="text-xs text-slate-500">{column.type}</p>
+                          <p className="text-sm font-medium text-foreground">{column.name}</p>
+                          <p className="text-xs text-(--muted)">{column.type}</p>
                         </div>
-                        <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                        <span className="rounded-full bg-(--surface) px-2 py-0.5 text-[11px] font-medium text-(--muted)">
                           {column.index}
                         </span>
                       </div>
@@ -581,7 +629,7 @@ export function Db2Playground({ initialCatalog }: Db2PlaygroundProps) {
 
                 <div>
                   <p className="text-xs uppercase tracking-[0.2em] text-(--muted)">Catalog snapshot</p>
-                  <div className="mt-3 space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  <div className="mt-3 space-y-3 rounded-lg border border-(--border) bg-(--surface-subtle) p-3">
                     <div className="grid gap-2 sm:grid-cols-2">
                       <InfoTile label="Records" value={`${displayedTableRecordCount}`} />
                       <InfoTile label="Primary key" value={getTablePrimaryKey(displayedTable)} />
@@ -589,32 +637,32 @@ export function Db2Playground({ initialCatalog }: Db2PlaygroundProps) {
                       <InfoTile label="Point columns" value={`${displayedTablePointColumns.length}`} />
                     </div>
 
-                    <div className="rounded-lg border border-slate-200 bg-white px-3 py-3">
-                      <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Indexed column map</p>
+                    <div className="rounded-lg border border-(--border) bg-(--surface) px-3 py-3">
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-(--muted)">Indexed column map</p>
                       <div className="mt-2 flex flex-wrap gap-2">
                         {displayedTableIndexLabels.length ? (
                           displayedTableIndexLabels.map((label) => (
-                            <span key={label} className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-700">
+                            <span key={label} className="rounded-full bg-(--surface-subtle) px-2.5 py-1 text-xs text-foreground">
                               {label}
                             </span>
                           ))
                         ) : (
-                          <span className="text-sm text-slate-500">No index metadata available yet.</span>
+                          <span className="text-sm text-(--muted)">No index metadata available yet.</span>
                         )}
                       </div>
                     </div>
 
-                    <div className="rounded-lg border border-slate-200 bg-white px-3 py-3">
-                      <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Point columns</p>
+                    <div className="rounded-lg border border-(--border) bg-(--surface) px-3 py-3">
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-(--muted)">Point columns</p>
                       <div className="mt-2 flex flex-wrap gap-2">
                         {displayedTablePointColumns.length ? (
                           displayedTablePointColumns.map((columnName) => (
-                            <span key={columnName} className="rounded-full bg-blue-50 px-2.5 py-1 text-xs text-blue-700">
+                            <span key={columnName} className="rounded-full bg-blue-500/10 px-2.5 py-1 text-xs text-(--accent)">
                               {columnName}
                             </span>
                           ))
                         ) : (
-                          <span className="text-sm text-slate-500">No point-indexed columns yet.</span>
+                          <span className="text-sm text-(--muted)">No point-indexed columns yet.</span>
                         )}
                       </div>
                     </div>
@@ -625,24 +673,24 @@ export function Db2Playground({ initialCatalog }: Db2PlaygroundProps) {
           </aside>
         </div>
 
-        <section className="border-t border-(--border) bg-white px-4 py-4">
+        <section className="border-t border-(--border) bg-(--surface) px-4 py-4">
           <div className="overflow-hidden rounded-xl border border-(--border) bg-(--surface-subtle)">
             <div className="flex items-center justify-between gap-3 border-b border-(--border) px-4 py-3">
               <div>
-                <h2 className="text-sm font-semibold text-slate-900">Results</h2>
-                <p className="mt-0.5 text-xs text-slate-500">
+                <h2 className="text-sm font-semibold text-foreground">Results</h2>
+                <p className="mt-0.5 text-xs text-(--muted)">
                   Latest query output or a table preview when no query has been executed.
                 </p>
               </div>
               <span
-                className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${executionError ? "bg-rose-50 text-rose-700" : latestResult ? "bg-blue-50 text-blue-700" : "bg-slate-100 text-slate-600"}`}
+                className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${executionError ? "bg-rose-500/10 text-rose-500" : latestResult ? "bg-blue-500/10 text-blue-400" : "bg-(--surface-subtle) text-(--muted)"}`}
               >
                 {executionError ?? latestResult?.message ?? "Waiting for execution"}
               </span>
             </div>
 
             {executionError ? (
-              <div className="border-b border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+              <div className="border-b border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-400">
                 {executionError}
               </div>
             ) : null}
@@ -651,34 +699,34 @@ export function Db2Playground({ initialCatalog }: Db2PlaygroundProps) {
               {latestResult?.isSpatial ? (
                 <div className="px-4 py-6">
                   <div className="mb-4 flex items-center justify-between">
-                    <p className="text-sm font-medium text-slate-900">Spatial data view</p>
+                    <p className="text-sm font-medium text-foreground">Spatial data view</p>
                   </div>
                   <div className="grid gap-4 lg:grid-cols-2">
                     <SpatialMap
                       data={latestResult.spatialData}
                       queryContext={getSpatialQueryContext(latestResult.statement)}
                     />
-                    <pre className="db2-scrollbar max-h-[420px] overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-4 text-xs font-mono text-slate-700">
+                    <pre className="db2-scrollbar max-h-[420px] overflow-y-auto rounded-lg border border-(--border) bg-(--surface-subtle) p-4 text-xs font-mono text-foreground">
                       {JSON.stringify(latestResult.spatialData, null, 2)}
                     </pre>
                   </div>
                 </div>
               ) : latestResult?.type === "create_table" ? (
-                <div className="px-4 py-6 text-sm text-slate-600">
-                  Table <span className="font-semibold text-slate-900">{latestResult.statement.table ?? "unknown"}</span> created successfully.
+                <div className="px-4 py-6 text-sm text-(--muted)">
+                  Table <span className="font-semibold text-foreground">{latestResult.statement.table ?? "unknown"}</span> created successfully.
                 </div>
               ) : latestResult?.type === "insert" || latestResult?.type === "delete" ? (
-                <div className="px-4 py-6 text-sm text-slate-600">
+                <div className="px-4 py-6 text-sm text-(--muted)">
                   {latestResult.affectedRows} row{latestResult.affectedRows !== 1 ? "s" : ""} affected.
                   {latestResult.rid && (
-                    <span className="mt-2 block text-xs text-slate-500">
+                    <span className="mt-2 block text-xs text-(--muted)">
                       Record IDs: {Array.isArray(latestResult.rid) ? latestResult.rid.join(", ") : latestResult.rid}
                     </span>
                   )}
                 </div>
               ) : latestResult?.result !== undefined ? (
-                <div className="px-4 py-6 text-sm text-slate-600">
-                  Result: <span className="font-semibold text-slate-900">{String(latestResult.result)}</span>
+                <div className="px-4 py-6 text-sm text-(--muted)">
+                  Result: <span className="font-semibold text-foreground">{String(latestResult.result)}</span>
                 </div>
               ) : (
                 <TablePreview rows={resultRows} columns={resultColumns} />
@@ -686,7 +734,7 @@ export function Db2Playground({ initialCatalog }: Db2PlaygroundProps) {
             </div>
 
             {latestResult?.metrics ? (
-              <div className="border-t border-(--border) bg-slate-50 px-4 py-4">
+              <div className="border-t border-(--border) bg-(--surface-subtle) px-4 py-4">
                 <p className="text-xs uppercase tracking-[0.2em] text-(--muted)">Execution metrics</p>
                 <div className="mt-3 grid gap-2 sm:grid-cols-4">
                   <Metric label="Time" value={`${latestResult.metrics.time_ms.toFixed(3)} ms`} />
@@ -697,21 +745,21 @@ export function Db2Playground({ initialCatalog }: Db2PlaygroundProps) {
               </div>
             ) : null}
 
-            <div className="grid gap-4 border-t border-(--border) bg-white px-4 py-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+            <div className="grid gap-4 border-t border-(--border) bg-(--surface) px-4 py-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
               <div>
                 <p className="text-xs uppercase tracking-[0.2em] text-(--muted)">Parser status</p>
-                <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700">
+                <div className="mt-2 rounded-lg border border-(--border) bg-(--surface-subtle) px-3 py-3 text-sm text-foreground">
                   {parseError ? (
                     <>
-                      <p className="font-medium text-rose-700">{parseError.message}</p>
-                      <p className="mt-1 text-xs text-slate-600">
+                      <p className="font-medium text-rose-500">{parseError.message}</p>
+                      <p className="mt-1 text-xs text-(--muted)">
                         Line {parseError.context.line}, column {parseError.context.column}.
                       </p>
                     </>
                   ) : (
                     <>
-                      <p className="font-medium text-slate-900">{summaryStatement?.type ?? "Program parsed"}</p>
-                      <p className="mt-1 text-xs text-slate-600">{renderAstSummary(summaryStatement)}</p>
+                      <p className="font-medium text-foreground">{summaryStatement?.type ?? "Program parsed"}</p>
+                      <p className="mt-1 text-xs text-(--muted)">{renderAstSummary(summaryStatement)}</p>
                     </>
                   )}
                 </div>
@@ -719,9 +767,9 @@ export function Db2Playground({ initialCatalog }: Db2PlaygroundProps) {
 
               <div>
                 <p className="text-xs uppercase tracking-[0.2em] text-(--muted)">Grammar notes</p>
-                <ul className="mt-2 space-y-2 rounded-lg border border-slate-200 bg-white px-3 py-3 text-xs text-slate-600">
+                <ul className="mt-2 space-y-2 rounded-lg border border-(--border) bg-(--surface) px-3 py-3 text-xs text-(--muted)">
                   <li>
-                    SELECT requires a WHERE clause, and supports <span className="font-mono text-slate-900">*</span> or explicit column lists.
+                    SELECT requires a WHERE clause, and supports <span className="font-mono text-foreground">*</span> or explicit column lists.
                   </li>
                   <li>WHERE supports comparisons, BETWEEN, and IN predicates for SELECT.</li>
                   <li>CREATE TABLE accepts PRIMARY KEY, column indexes and optional FROM FILE source.</li>
@@ -763,9 +811,9 @@ function renderAstSummary(statement: Db2Statement | null): string {
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
-      <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">{label}</p>
-      <p className="mt-1 text-sm font-medium text-slate-900">{value}</p>
+    <div className="rounded-lg border border-(--border) bg-(--surface) px-3 py-2">
+      <p className="text-[11px] uppercase tracking-[0.18em] text-(--muted)">{label}</p>
+      <p className="mt-1 text-sm font-medium text-foreground">{value}</p>
     </div>
   );
 }
@@ -791,7 +839,7 @@ function ActionButton({
       className={`inline-flex h-9 items-center justify-center rounded-md border px-3 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 ${
         isPrimary
           ? "border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
-          : "border-(--border) bg-white text-slate-700 hover:border-slate-300 hover:text-slate-900"
+          : "border-(--border) bg-(--surface) text-(--muted) hover:border-(--border) hover:text-foreground"
       }`}
     >
       {children}
@@ -801,9 +849,9 @@ function ActionButton({
 
 function InfoTile({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
-      <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">{label}</p>
-      <p className="mt-1 text-sm font-medium text-slate-900">{value}</p>
+    <div className="rounded-lg border border-(--border) bg-(--surface) px-3 py-2">
+      <p className="text-[11px] uppercase tracking-[0.18em] text-(--muted)">{label}</p>
+      <p className="mt-1 text-sm font-medium text-foreground">{value}</p>
     </div>
   );
 }
@@ -821,21 +869,21 @@ function TablePreview({
 
   return (
     <table className="w-full border-collapse text-left text-sm">
-      <thead className="bg-slate-100 text-xs uppercase tracking-[0.18em] text-slate-500">
+      <thead className="bg-(--surface-subtle) text-xs uppercase tracking-[0.18em] text-(--muted)">
         <tr>
           {columns.map((column) => (
-            <th key={column.name} className="border-b border-slate-200 px-3 py-2 font-medium">
+            <th key={column.name} className="border-b border-(--border) px-3 py-2 font-medium">
               {column.name}
             </th>
           ))}
         </tr>
       </thead>
-      <tbody className="bg-white">
+      <tbody className="bg-(--surface)">
         {rows.length ? (
           rows.map((row, rowIndex) => (
-            <tr key={rowIndex} className="odd:bg-white even:bg-slate-50">
+            <tr key={rowIndex} className="odd:bg-(--surface) even:bg-(--surface-subtle)">
               {columns.map((column) => (
-                <td key={column.name} className="border-b border-slate-200 px-3 py-2 font-mono text-[12px] text-slate-800">
+                <td key={column.name} className="border-b border-(--border) px-3 py-2 font-mono text-[12px] text-foreground">
                   {formatCell(row[column.name])}
                 </td>
               ))}
@@ -843,13 +891,63 @@ function TablePreview({
           ))
         ) : (
           <tr>
-            <td colSpan={columns.length} className="px-3 py-6 text-sm text-slate-500">
+            <td colSpan={columns.length} className="px-3 py-6 text-sm text-(--muted)">
               No rows to display.
             </td>
           </tr>
         )}
       </tbody>
     </table>
+  );
+}
+
+function ThemeToggle({ isDark, onToggle }: { isDark: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      id="theme-toggle"
+      onClick={onToggle}
+      aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+      title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+      className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-(--border) bg-(--surface) text-(--muted) transition-all duration-200 hover:border-(--accent) hover:text-(--accent)"
+      style={{ position: "relative", overflow: "hidden" }}
+    >
+      <span
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          transition: "opacity 0.3s ease, transform 0.4s ease",
+          opacity: isDark ? 0 : 1,
+          transform: isDark ? "rotate(-90deg) scale(0.5)" : "rotate(0deg) scale(1)",
+          position: "absolute",
+        }}
+        aria-hidden="true"
+      >
+        {/* Sun icon */}
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="4" />
+          <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
+        </svg>
+      </span>
+      <span
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          transition: "opacity 0.3s ease, transform 0.4s ease",
+          opacity: isDark ? 1 : 0,
+          transform: isDark ? "rotate(0deg) scale(1)" : "rotate(90deg) scale(0.5)",
+          position: "absolute",
+        }}
+        aria-hidden="true"
+      >
+        {/* Moon icon */}
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+        </svg>
+      </span>
+    </button>
   );
 }
 
